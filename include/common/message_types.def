@@ -1,0 +1,208 @@
+/* --- ФАЙЛ С ОПРЕДЕЛЕНИЯМИ ТИПОВ СООБЩЕНИЙ ДЛЯ ГЕНЕРАЦИИ enum И ТАБЛИЦ СВОЙСТВ ЧЕРЕЗ МАКРОСЫ, А ТАК ЖЕ ОПИСАНИЕ ДЛЯ ДИАГНОСТИКИ --- */
+/*
+ * MESSAGE_TYPE(
+ *     name,
+ *     id,
+ *     properties,
+ *     payload_policy,
+ *     description
+ * )
+ */
+
+/* Invalid */
+
+MESSAGE_TYPE(
+    UNKNOWN,
+    0,
+    MESSAGE_PROPERTY_NONE,
+    PAYLOAD_POLICY_ANY,
+    "Некорректный или неизвестный тип сообщения"
+)
+
+/* Transport */
+
+MESSAGE_TYPE(
+    PING_REQUEST,
+    1,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_EMPTY,
+    "Запрос проверки доступности сервера"
+)
+
+MESSAGE_TYPE(
+    PING_RESPONSE,
+    2,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_EMPTY,
+    "Ответ сервера на запрос проверки доступности"
+)
+
+MESSAGE_TYPE(
+    ECHO_REQUEST,
+    3,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_ANY,
+    "Запрос проверки передачи данных; сервер должен вернуть тот же payload"
+)
+
+MESSAGE_TYPE(
+    ECHO_RESPONSE,
+    4,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_ANY,
+    "Ответ на echo-запрос, содержащий payload исходного запроса"
+)
+
+/* Authentication */
+
+MESSAGE_TYPE(
+    REGISTER_REQUEST,
+    10,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    "Запрос регистрации нового пользователя"
+)
+
+MESSAGE_TYPE(
+    REGISTER_RESPONSE,
+    11,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с результатом регистрации пользователя"
+)
+
+MESSAGE_TYPE(
+    LOGIN_REQUEST,
+    12,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    "Запрос авторизации пользователя"
+)
+
+MESSAGE_TYPE(
+    LOGIN_RESPONSE,
+    13,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с результатом авторизации пользователя"
+)
+
+MESSAGE_TYPE(
+    LOGOUT_REQUEST,
+    14,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_EMPTY,
+    "Запрос выхода пользователя из текущей учётной записи"
+)
+
+MESSAGE_TYPE(
+    LOGOUT_RESPONSE,
+    15,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_EMPTY,
+    "Ответ сервера с результатом выхода из учётной записи"
+)
+
+/* Text messages */
+
+MESSAGE_TYPE(
+    TEXT_SEND_REQUEST,
+    20,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    "Запрос отправки нового текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_SEND_RESPONSE,
+    21,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с результатом отправки текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_CREATED_EVENT,
+    22,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_EVENT,
+    PAYLOAD_POLICY_REQUIRED,
+    "Серверное событие создания нового текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_EDIT_REQUEST,
+    23,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    "Запрос редактирования существующего текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_EDIT_RESPONSE,
+    24,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с результатом редактирования текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_EDITED_EVENT,
+    25,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_EVENT,
+    PAYLOAD_POLICY_REQUIRED,
+    "Серверное событие изменения существующего текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_DELETE_REQUEST,
+    26,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    "Запрос удаления существующего текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_DELETE_RESPONSE,
+    27,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с результатом удаления текстового сообщения"
+)
+
+MESSAGE_TYPE(
+    TEXT_DELETED_EVENT,
+    28,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_EVENT,
+    PAYLOAD_POLICY_REQUIRED,
+    "Серверное событие удаления существующего текстового сообщения"
+)
+
+/* Errors */
+
+MESSAGE_TYPE(
+    ERROR_RESPONSE,
+    255,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    "Ответ сервера с информацией об ошибке обработки запроса"
+)
