@@ -53,3 +53,12 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# build files and enviroment
+build/
+.cache/
+compile_commands.json
+.clang-format
+
+# server data files
+data/

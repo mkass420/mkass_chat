@@ -1,0 +1,154 @@
+name: CI and Release
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            python3 \
+            zlib1g-dev \
+            libsqlite3-dev
+
+      - name: Run all tests
+        run: |
+          if ! make clean test; then
+            echo
+            echo "Integration server log:"
+            cat build/integration-server.log 2>/dev/null || true
+            exit 1
+          fi
+
+  valgrind:
+    name: Valgrind
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            valgrind \
+            zlib1g-dev \
+            libsqlite3-dev
+
+      - name: Build unit tests
+        run: make clean test-unit
+
+      - name: Run Valgrind
+        shell: bash
+        run: |
+          set -o pipefail
+
+          valgrind \
+            --leak-check=full \
+            --show-leak-kinds=all \
+            --errors-for-leak-kinds=all \
+            --track-origins=yes \
+            --error-exitcode=1 \
+            ./build/unit-tests \
+            2>&1 | tee build/valgrind.log
+
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    needs:
+      - tests
+      - valgrind
+
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            zlib1g-dev \
+            libsqlite3-dev
+
+      - name: Build all binaries
+        run: make clean all
+
+      - name: Prepare release archive
+        id: package
+        shell: bash
+        run: |
+          set -eu
+
+          test -x build/chat-server
+          test -x build/chat-client
+          test -x build/chat-admin
+
+          mkdir -p dist/package
+
+          cp build/chat-server dist/package/
+          cp build/chat-client dist/package/
+          cp build/chat-admin dist/package/
+
+          strip --strip-unneeded dist/package/chat-server
+          strip --strip-unneeded dist/package/chat-client
+          strip --strip-unneeded dist/package/chat-admin
+
+          tar \
+            -C dist/package \
+            -czf dist/chat-linux-x86_64.tar.gz \
+            chat-server \
+            chat-client \
+            chat-admin
+
+          (
+            cd dist
+            sha256sum chat-linux-x86_64.tar.gz > SHA256SUMS
+          )
+
+          short_sha="${GITHUB_SHA::7}"
+          tag="main-${short_sha}"
+
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+          SHORT_SHA: ${{ steps.package.outputs.short_sha }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            dist/chat-linux-x86_64.tar.gz \
+            dist/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "Build ${SHORT_SHA}" \
+            --generate-notes
