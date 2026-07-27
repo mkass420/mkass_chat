@@ -19,6 +19,13 @@ typedef enum {
 // Политика для содержимого сообщения (в зависимости от типа)
 typedef enum { PAYLOAD_POLICY_ANY = 0, PAYLOAD_POLICY_EMPTY, PAYLOAD_POLICY_REQUIRED } PayloadPolicy;
 
+// Политика для сжатия кадров (в зависимости от типа сообщения)
+typedef enum {
+    COMPRESSION_POLICY_NEVER = 0,
+    COMPRESSION_POLICY_TRY,
+    COMPRESSION_POLICY_REQUIRE
+} FrameCompressionPolicy;
+
 // Результаты валидации заголовков для возвращения ошибки
 typedef enum {
     PACKET_HEADER_VALID = 0,
@@ -36,7 +43,7 @@ typedef enum {
 
 // Генерация enum, содержащего каждый тип сообщения (см. файл message_types.def)
 typedef enum {
-#define MESSAGE_TYPE(name, id, properties, payload_policy, description) MSG_TYPE_##name = id,
+#define MESSAGE_TYPE(name, id, properties, payload_policy, compression_policy, description) MSG_TYPE_##name = id,
 
 #include "common/message_types.def"
 
@@ -46,10 +53,11 @@ static_assert(sizeof(MessageType) == 1, "Short enums are not enabled or packed a
 
 // Структура для хранения метаданных каждого типа сообщения
 typedef struct {
-    uint8_t       properties;
-    PayloadPolicy payload_policy;
-    const char*   name;
-    const char*   description;
+    uint8_t                properties;
+    PayloadPolicy          payload_policy;
+    FrameCompressionPolicy compression_policy;
+    const char*            name;
+    const char*            description;
 } MessageTypeInfo;
 
 // Структура заголовка для работы на хосте, host byte order, выравнивание включено
@@ -90,8 +98,9 @@ void packet_header_from_wire(
 ); // функция для преобразования заголовка из сетевого представления в представление хоста
 
 /* --- Автогенерируемые функции, связанные с типами сообщений --- */
-const MessageTypeInfo*
-message_type_get_info(MessageType type); // Функция получения метаданных для конкретного типа сообщения
+const MessageTypeInfo* message_type_get_info(
+    MessageType type
+); // Функция получения метаданных для конкретного типа сообщения
 
 const char* message_type_to_string(MessageType type);       // Функция получения строки-названия типа сообщения
 const char* message_type_get_description(MessageType type); // Функция получения строки-описания типа сообщения

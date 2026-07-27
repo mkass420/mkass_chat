@@ -3,7 +3,8 @@
 #include "server/server.h"
 
 #include "server/dispatcher.h"
-#include "server/session.h"
+#include "server/transport.h"
+#include "server/connection.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -23,75 +24,85 @@ static volatile sig_atomic_t stop_requested = 0;
 
 void server_request_stop(void) { stop_requested = 1; }
 
-static ClientSession* server_find_free_session(ServerState* server) {
+static ClientConnection* server_find_free_connection(ServerState* server) {
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
-        ClientSession* session = &server->sessions[i];
+        ClientConnection* connection = &server->connections[i];
 
-        if(!session_is_active(session)) {
-            return session;
+        if(!connection_is_active(connection)) {
+            return connection;
         }
     }
 
     return NULL;
 }
 
-static void server_close_session(ServerState* server, ClientSession* session) {
-    if(server == NULL || session == NULL || !session_is_active(session)) {
+static void server_close_connection(ServerState* server, ClientConnection* connection) {
+    if(server == NULL || connection == NULL || !connection_is_active(connection)) {
         return;
     }
 
-    const int socket_fd = session->socket_fd;
+    TransportSession* transport = &connection->transport;
 
-    // Явно удаляем сокет из epoll перед закрытием.
+    const int socket_fd = transport->socket_fd;
+
+    // Удаляем сокет из epoll перед закрытием.
     if(server->epoll_fd >= 0) {
         (void)epoll_ctl(server->epoll_fd, EPOLL_CTL_DEL, socket_fd, NULL);
     }
 
+    // Здесь позже отменяются файловые передачи.
+    // file_transfer_abort_all(...);
+
     (void)close(socket_fd);
-    session_reset(session);
+
+    connection_reset(connection);
 }
 
-static int server_update_session_events(ServerState* server, ClientSession* session) {
+static int server_update_connection_events(ServerState* server, ClientConnection* connection) {
+    TransportSession* transport = &connection->transport;
+
     struct epoll_event event = {0};
 
     event.events   = EPOLLIN | EPOLLRDHUP;
-    event.data.ptr = session;
+    event.data.ptr = connection;
 
     // EPOLLOUT нужен только при наличии данных в очереди.
-    if(session_has_pending_write(session)) {
+    if(transport_has_pending_write(transport)) {
         event.events |= EPOLLOUT;
     }
 
-    return epoll_ctl(server->epoll_fd, EPOLL_CTL_MOD, session->socket_fd, &event);
+    return epoll_ctl(server->epoll_fd, EPOLL_CTL_MOD, transport->socket_fd, &event);
 }
 
 static int server_add_client(ServerState* server, int client_fd) {
-    ClientSession* session = server_find_free_session(server);
+    ClientConnection* connection = server_find_free_connection(server);
 
-    if(session == NULL) {
-        fprintf(stderr, "Connection rejected: session limit reached\n");
+    if(connection == NULL) {
+        fprintf(stderr, "Connection rejected: connection limit reached\n");
+
         (void)close(client_fd);
         return 0;
     }
 
-    session_init(session, client_fd);
+    connection_open(connection, client_fd);
 
     struct epoll_event event = {0};
 
     event.events   = EPOLLIN | EPOLLRDHUP;
-    event.data.ptr = session;
+    event.data.ptr = connection;
 
     if(epoll_ctl(server->epoll_fd, EPOLL_CTL_ADD, client_fd, &event) != 0) {
         const int saved_errno = errno;
 
         (void)close(client_fd);
-        session_reset(session);
+        connection_reset(connection);
 
         errno = saved_errno;
         return -1;
     }
 
-    printf("Client connected: fd=%d\n", client_fd);
+    printf("Client connected: fd=%d, generation=%llu\n", client_fd, (unsigned long long)connection->generation);
+
     return 0;
 }
 
@@ -120,53 +131,64 @@ static int server_accept_clients(ServerState* server) {
     }
 }
 
-static const char* session_io_result_to_string(SessionIoResult result) {
+static const char* transport_io_result_to_string(TransportIoResult result) {
     switch(result) {
-        case SESSION_IO_OK: return "ok";
-        case SESSION_IO_PEER_CLOSED: return "peer closed connection";
-        case SESSION_IO_PROTOCOL_ERROR: return "protocol error";
-        case SESSION_IO_BUFFER_FULL: return "session buffer is full";
-        case SESSION_IO_SYSTEM_ERROR: return "socket system error";
-        case SESSION_IO_INVALID_ARGUMENT: return "invalid session argument";
-        case SESSION_IO_FRAME_BUILD_ERROR: return "frame build error";
-        default: return "unknown session error";
+        case TRANSPORT_IO_OK: return "ok";
+        case TRANSPORT_IO_PEER_CLOSED: return "peer closed connection";
+        case TRANSPORT_IO_PROTOCOL_ERROR: return "protocol error";
+        case TRANSPORT_IO_BUFFER_FULL: return "transport buffer is full";
+        case TRANSPORT_IO_SYSTEM_ERROR: return "socket system error";
+        case TRANSPORT_IO_INVALID_ARGUMENT: return "invalid transport argument";
+        case TRANSPORT_IO_FRAME_BUILD_ERROR: return "frame build error";
+        default: return "unknown transport error";
     }
 }
 
-static void server_handle_client_event(ServerState* server, ClientSession* session, uint32_t events) {
-    if(!session_is_active(session)) {
+static void server_handle_client_event(ServerState* server, ClientConnection* connection, uint32_t events) {
+    if(!connection_is_active(connection)) {
         return;
     }
+
+    TransportSession* transport = &connection->transport;
 
     if((events & (EPOLLERR | EPOLLHUP)) != 0U) {
-        printf("Client disconnected: fd=%d, epoll error/hangup\n", session->socket_fd);
-        server_close_session(server, session);
+        printf("Client disconnected: fd=%d, epoll error/hangup\n", transport->socket_fd);
+
+        server_close_connection(server, connection);
+
         return;
     }
 
-    SessionIoResult result = SESSION_IO_OK;
+    TransportIoResult result = TRANSPORT_IO_OK;
 
-    // При EPOLLRDHUP дочитываем входной буфер до EOF.
     if((events & (EPOLLIN | EPOLLRDHUP)) != 0U) {
-        result = session_handle_read(session, server_dispatch_frame, server);
+        ServerDispatchContext dispatch_context = {
+            .server     = server,
+            .connection = connection,
+        };
+
+        result = transport_handle_read(transport, server_dispatch_frame, &dispatch_context);
     }
 
-    // Сразу отправляем подготовленный ответ без ожидания EPOLLOUT.
-    if(result == SESSION_IO_OK && session_has_pending_write(session)) {
-        result = session_handle_write(session);
+    // Сразу отправляем подготовленный ответ.
+    if(result == TRANSPORT_IO_OK && transport_has_pending_write(transport)) {
+        result = transport_handle_write(transport);
     }
 
-    if(result != SESSION_IO_OK) {
-        const int socket_fd = session->socket_fd;
+    if(result != TRANSPORT_IO_OK) {
+        const int socket_fd = transport->socket_fd;
 
-        fprintf(stderr, "Client fd=%d closed: %s\n", socket_fd, session_io_result_to_string(result));
-        server_close_session(server, session);
+        fprintf(stderr, "Client fd=%d closed: %s\n", socket_fd, transport_io_result_to_string(result));
+
+        server_close_connection(server, connection);
+
         return;
     }
 
-    if(server_update_session_events(server, session) != 0) {
+    if(server_update_connection_events(server, connection) != 0) {
         perror("epoll_ctl(MOD client)");
-        server_close_session(server, session);
+
+        server_close_connection(server, connection);
     }
 }
 
@@ -183,7 +205,7 @@ int server_init(ServerState* server, const char* bind_address, uint16_t port) {
     server->server_socket = -1;
 
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
-        session_reset(&server->sessions[i]);
+        connection_slot_init(&server->connections[i]);
     }
 
     const int listener_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
@@ -301,8 +323,8 @@ int server_run(ServerState* server) {
                 continue;
             }
 
-            ClientSession* session = event->data.ptr;
-            server_handle_client_event(server, session, event->events);
+            ClientConnection* connection = event->data.ptr;
+            server_handle_client_event(server, connection, event->events);
         }
     }
 
@@ -315,7 +337,7 @@ void server_destroy(ServerState* server) {
     }
 
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
-        server_close_session(server, &server->sessions[i]);
+        server_close_connection(server, &server->connections[i]);
     }
 
     if(server->server_socket >= 0) {

@@ -6,12 +6,16 @@
 #include <arpa/inet.h>
 
 static const MessageTypeInfo MESSAGE_TYPE_INFO[256] = {
-#define MESSAGE_TYPE(message_name, message_id, message_properties, message_payload_policy, message_description) \
-    [MSG_TYPE_##message_name] = {                                                                               \
-        .properties     = (message_properties),                                                                 \
-        .payload_policy = (message_payload_policy),                                                             \
-        .name           = #message_name,                                                                        \
-        .description    = (message_description),                                                                \
+#define MESSAGE_TYPE(                                                                                 \
+    message_name, message_id, message_properties, message_payload_policy, message_compression_policy, \
+    message_description                                                                               \
+)                                                                                                     \
+    [MSG_TYPE_##message_name] = {                                                                     \
+        .properties         = (message_properties),                                                   \
+        .payload_policy     = (message_payload_policy),                                               \
+        .name               = #message_name,                                                          \
+        .compression_policy = (message_compression_policy),                                           \
+        .description        = (message_description),                                                  \
     },
 
 #include "common/message_types.def"

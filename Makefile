@@ -9,7 +9,8 @@ COMMON_SRC = \
 	src/common/frame.c
 
 SERVER_CORE_SRC = \
-	src/server/session.c \
+	src/server/transport.c \
+	src/server/connection.c \
 	src/server/dispatcher.c
 
 SERVER_SRC = \

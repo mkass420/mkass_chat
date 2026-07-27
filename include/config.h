@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 /* --- PROTOCOL SETTINGS --- */
-#define PROTOCOL_MAX_PAYLOAD_LENGTH (64U * 1024U) // 64 КиБ - лимит размера данных после сжатия
+#define PROTOCOL_MAX_PAYLOAD_LENGTH (64U * 1024U) // 64 КиБ - лимит размера данных после сжатия, включая метаданные
 #define PROTOCOL_MAX_UNCOMPRESSED_LENGTH                                                        \
     (256U * 1024U) // 256 Киб - лимит несжатого размера для каждого ЧАНКА, не для файла целиком
 #define PROTOCOL_MAGIC 0x4348U
@@ -10,6 +10,17 @@
 #define PACKET_FLAG_COMPRESSED  0x01U
 #define PACKET_KNOWN_FLAGS      PACKET_FLAG_COMPRESSED
 #define PACKET_HEADER_WIRE_SIZE 20U
+
+/* --- FILE SETTINGS --- */
+#define FILE_MAX_SIZE        (128ULL * 1024ULL * 1024ULL) // Максимальный размер всего файлв
+#define FILE_CHUNK_DATA_SIZE (60U * 1024U)                // Максимальное количество байт файла в одном сообщении
+#define FILE_ID_SIZE         16U
+#define FILE_MAX_NAME_LENGTH 255U
+#define FILE_MAX_MIME_LENGTH 64U
+
+/* --- COMPRESSION SETTINGS --- */
+#define COMPRESSION_MIN_INPUT_SIZE 512U
+#define COMPRESSION_MIN_SAVING     32U
 
 /* --- USER SETTINGS --- */
 #define USER_MAX_LOGIN_LENGTH     32
@@ -22,8 +33,8 @@
 /* --- SERVER SETTINGS --- */
 #define SERVER_MAX_CONNECTIONS 1024
 
-#define SESSION_READ_BUFFER_SIZE  (PACKET_HEADER_WIRE_SIZE + PROTOCOL_MAX_PAYLOAD_LENGTH)
-#define SESSION_WRITE_BUFFER_SIZE (2U * (PACKET_HEADER_WIRE_SIZE + PROTOCOL_MAX_PAYLOAD_LENGTH))
+#define TRANSPORT_READ_BUFFER_SIZE  (PACKET_HEADER_WIRE_SIZE + PROTOCOL_MAX_PAYLOAD_LENGTH)
+#define TRANSPORT_WRITE_BUFFER_SIZE (2U * (PACKET_HEADER_WIRE_SIZE + PROTOCOL_MAX_PAYLOAD_LENGTH))
 
 /* --- ADMIN SETTINGS --- */
 

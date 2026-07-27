@@ -14,11 +14,29 @@ typedef enum {
     FRAME_PARSE_UNSUPPORTED_COMPRESSION
 } FrameParseResult;
 
+typedef enum {
+    FRAME_DECODE_OK = 0,
+    FRAME_DECODE_INVALID_ARGUMENT,
+    FRAME_DECODE_INVALID_SIZE,
+    FRAME_DECODE_INVALID_STREAM
+} FrameDecodeResult;
+
 typedef struct {
     PacketHeader   header;
     const uint8_t* payload; // Указатель внутрь входного буфера, недействителен после сдвига буфера.
     size_t         frame_size;
 } ParsedFrame;
+
+typedef struct {
+    PacketHeader   header;
+    const uint8_t* payload;
+    uint32_t       payload_len;
+} DecodedFrame;
+
+typedef struct {
+    uint8_t compress_buffer[PROTOCOL_MAX_PAYLOAD_LENGTH];
+    uint8_t decompress_buffer[PROTOCOL_MAX_UNCOMPRESSED_LENGTH];
+} FrameCodec;
 
 FrameParseResult frame_try_parse(const uint8_t* buffer, size_t buffer_size, ParsedFrame* frame);
 
@@ -30,6 +48,19 @@ int frame_build_uncompressed(
     uint8_t*       output,
     size_t         output_capacity,
     size_t*        output_size
+);
+
+FrameDecodeResult frame_decode(FrameCodec* codec, const ParsedFrame* parsed, DecodedFrame* decoded);
+
+int frame_build(
+    FrameCodec*            codec,
+    MessageType            type,
+    uint32_t               request_id,
+    const uint8_t*         payload,
+    uint32_t               payload_len,
+    uint8_t*               output,
+    size_t                 output_capacity,
+    size_t*                output_size
 );
 
 #endif

@@ -1,10 +1,12 @@
-/* --- ФАЙЛ С ОПРЕДЕЛЕНИЯМИ ТИПОВ СООБЩЕНИЙ ДЛЯ ГЕНЕРАЦИИ enum И ТАБЛИЦ СВОЙСТВ ЧЕРЕЗ МАКРОСЫ, А ТАК ЖЕ ОПИСАНИЕ ДЛЯ ДИАГНОСТИКИ --- */
+/* --- ФАЙЛ С ОПРЕДЕЛЕНИЯМИ ТИПОВ СООБЩЕНИЙ ДЛЯ ГЕНЕРАЦИИ enum И ТАБЛИЦ СВОЙСТВ ЧЕРЕЗ МАКРОСЫ, А ТАК ЖЕ ОПИСАНИЕ ДЛЯ
+ * ДИАГНОСТИКИ --- */
 /*
  * MESSAGE_TYPE(
  *     name,
  *     id,
  *     properties,
  *     payload_policy,
+ *     compression_policy,
  *     description
  * )
  */
@@ -16,6 +18,7 @@ MESSAGE_TYPE(
     0,
     MESSAGE_PROPERTY_NONE,
     PAYLOAD_POLICY_ANY,
+    COMPRESSION_POLICY_NEVER,
     "Некорректный или неизвестный тип сообщения"
 )
 
@@ -24,36 +27,36 @@ MESSAGE_TYPE(
 MESSAGE_TYPE(
     PING_REQUEST,
     1,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
     "Запрос проверки доступности сервера"
 )
 
 MESSAGE_TYPE(
     PING_RESPONSE,
     2,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера на запрос проверки доступности"
 )
 
 MESSAGE_TYPE(
     ECHO_REQUEST,
     3,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_ANY,
+    COMPRESSION_POLICY_TRY,
     "Запрос проверки передачи данных; сервер должен вернуть тот же payload"
 )
 
 MESSAGE_TYPE(
     ECHO_RESPONSE,
     4,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_ANY,
+    COMPRESSION_POLICY_TRY,
     "Ответ на echo-запрос, содержащий payload исходного запроса"
 )
 
@@ -62,54 +65,54 @@ MESSAGE_TYPE(
 MESSAGE_TYPE(
     REGISTER_REQUEST,
     10,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Запрос регистрации нового пользователя"
 )
 
 MESSAGE_TYPE(
     REGISTER_RESPONSE,
     11,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом регистрации пользователя"
 )
 
 MESSAGE_TYPE(
     LOGIN_REQUEST,
     12,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Запрос авторизации пользователя"
 )
 
 MESSAGE_TYPE(
     LOGIN_RESPONSE,
     13,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом авторизации пользователя"
 )
 
 MESSAGE_TYPE(
     LOGOUT_REQUEST,
     14,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
     "Запрос выхода пользователя из текущей учётной записи"
 )
 
 MESSAGE_TYPE(
     LOGOUT_RESPONSE,
     15,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом выхода из учётной записи"
 )
 
@@ -118,81 +121,81 @@ MESSAGE_TYPE(
 MESSAGE_TYPE(
     TEXT_SEND_REQUEST,
     20,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
     "Запрос отправки нового текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_SEND_RESPONSE,
     21,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом отправки текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_CREATED_EVENT,
     22,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_EVENT,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_EVENT,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
     "Серверное событие создания нового текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_EDIT_REQUEST,
     23,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
     "Запрос редактирования существующего текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_EDIT_RESPONSE,
     24,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом редактирования текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_EDITED_EVENT,
     25,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_EVENT,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_EVENT,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
     "Серверное событие изменения существующего текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_DELETE_REQUEST,
     26,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_REQUEST,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_REQUEST,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Запрос удаления существующего текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_DELETE_RESPONSE,
     27,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с результатом удаления текстового сообщения"
 )
 
 MESSAGE_TYPE(
     TEXT_DELETED_EVENT,
     28,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_EVENT,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_EVENT,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Серверное событие удаления существующего текстового сообщения"
 )
 
@@ -201,8 +204,8 @@ MESSAGE_TYPE(
 MESSAGE_TYPE(
     ERROR_RESPONSE,
     255,
-    MESSAGE_PROPERTY_VALID |
-        MESSAGE_PROPERTY_RESPONSE,
+    MESSAGE_PROPERTY_VALID | MESSAGE_PROPERTY_RESPONSE,
     PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
     "Ответ сервера с информацией об ошибке обработки запроса"
 )
