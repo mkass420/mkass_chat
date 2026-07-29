@@ -16,7 +16,16 @@ SERVER_CORE_SRC = \
 	src/server/connection.c \
 	src/server/dispatcher.c \
 	src/server/file_storage.c \
-	src/server/file_transfer.c
+	src/server/file_transfer.c \
+	src/server/file_repository.c \
+	src/server/handlers/service_handlers.c \
+	src/server/handlers/file_handlers.c
+
+SERVER_SRC = \
+	src/server/main.c \
+	src/server/server.c \
+	$(SERVER_CORE_SRC) \
+	$(COMMON_SRC)
 
 UNIT_TEST_SRC = \
 	tests/unit/test_main.c \
@@ -28,8 +37,12 @@ UNIT_TEST_SRC = \
 	tests/unit/test_connection.c \
 	tests/unit/test_dispatcher.c \
 	tests/unit/test_file_modules.c \
+	tests/unit/test_file_repository.c \
+	tests/unit/test_file_handlers.c \
 	$(SERVER_CORE_SRC) \
 	$(COMMON_SRC)
+
+
 
 .PHONY: all server test test-unit test-unit-sanitize clean
 

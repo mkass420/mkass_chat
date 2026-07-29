@@ -3,6 +3,8 @@
 
 #include "config.h"
 #include "server/connection.h"
+#include "server/file_repository.h"
+#include "server/file_storage.h"
 #include "common/frame.h"
 
 #include <sqlite3.h>
@@ -17,6 +19,7 @@ typedef struct {
     int              server_socket; // Слушающий сокет сервера
     FrameCodec       frame_codec;   // Кодек
     FileStorage      file_storage;
+    FileRepository   file_repository;
     ClientConnection connections[SERVER_MAX_CONNECTIONS]; // Массив со всеми активными TCP соединениями
 } ServerState;
 

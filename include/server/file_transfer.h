@@ -23,6 +23,14 @@ typedef enum {
 } FileDownloadStatus;
 
 typedef struct {
+    FileId   file_id;
+    uint64_t file_size;
+    uint32_t file_crc32;
+    uint16_t file_name_len;
+    char     file_name[FILE_MAX_NAME_LENGTH + 1U];
+} CompletedFileUpload;
+
+typedef struct {
     FileUploadStatus status;
     FileId           file_id;
     int              file_fd;
@@ -30,6 +38,7 @@ typedef struct {
     uint64_t         committed_size;
     uint32_t         running_crc32;
     uint64_t         last_activity_ms;
+    uint16_t         file_name_len;
     char             file_name[FILE_MAX_NAME_LENGTH + 1U];
 } FileUploadState;
 
@@ -40,6 +49,7 @@ typedef struct {
     uint64_t           file_size;
     uint64_t           current_offset;
     uint64_t           last_activity_ms;
+    uint16_t           file_name_len;
     char               file_name[FILE_MAX_NAME_LENGTH + 1U];
 } FileDownloadState;
 
@@ -74,12 +84,7 @@ FileTransferResult file_upload_begin(
 
 FileTransferResult file_upload_write(FileUploadState* upload, const uint8_t* data, uint32_t data_len);
 
-FileTransferResult file_upload_finish(
-    FileStorage*     storage,
-    FileUploadState* upload,
-    FileId*          completed_file_id,
-    uint32_t*        completed_crc32
-);
+FileTransferResult file_upload_finish(FileStorage* storage, FileUploadState* upload, CompletedFileUpload* completed);
 
 void file_upload_abort(FileStorage* storage, FileUploadState* upload);
 

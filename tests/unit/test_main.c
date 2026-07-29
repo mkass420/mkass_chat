@@ -67,6 +67,8 @@ int main(void) {
     register_connection_tests(&suite);
     register_dispatcher_tests(&suite);
     register_file_tests(&suite);
+    register_file_repository_tests(&suite);
+    register_file_handler_tests(&suite);
 
     return test_suite_run(&suite);
 }

@@ -255,9 +255,12 @@ static bool test_file_upload_download_round_trip(void) {
     TEST_ASSERT(file_upload_write(&state.upload, second, (uint32_t)(sizeof(second) - 1U)) == FILE_TRANSFER_OK);
     TEST_ASSERT(state.upload.committed_size == sizeof(expected) - 1U);
 
-    FileId   file_id;
-    uint32_t file_crc32 = 0U;
-    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &file_id, &file_crc32) == FILE_TRANSFER_OK);
+    CompletedFileUpload completed_upload;
+    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &completed_upload) == FILE_TRANSFER_OK);
+
+    FileId   file_id    = completed_upload.file_id;
+    uint32_t file_crc32 = completed_upload.file_crc32;
+
     TEST_ASSERT(!file_upload_is_active(&state.upload));
     TEST_ASSERT(!file_id_is_zero(&file_id));
 
@@ -334,8 +337,8 @@ static bool test_file_upload_validation_and_abort(void) {
     TEST_ASSERT(file_upload_write(&state.upload, data, sizeof(data)) == FILE_TRANSFER_OK);
     TEST_ASSERT(file_upload_write(&state.upload, data, sizeof(data)) == FILE_TRANSFER_INVALID_CHUNK);
 
-    FileId completed_id;
-    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &completed_id, NULL) == FILE_TRANSFER_INCOMPLETE);
+    CompletedFileUpload completed_upload;
+    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &completed_upload) == FILE_TRANSFER_INCOMPLETE);
 
     file_upload_abort(&fixture.storage, &state.upload);
     TEST_ASSERT(!file_upload_is_active(&state.upload));
@@ -357,11 +360,10 @@ static bool test_empty_file_round_trip(void) {
     TEST_ASSERT(
         file_upload_begin(&fixture.storage, &state.upload, 0U, name, (uint16_t)(sizeof(name) - 1U)) == FILE_TRANSFER_OK
     );
-
-    FileId   file_id;
-    uint32_t crc = 1U;
-    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &file_id, &crc) == FILE_TRANSFER_OK);
-    TEST_ASSERT(crc == 0U);
+    CompletedFileUpload completed_upload;
+    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &completed_upload) == FILE_TRANSFER_OK);
+    TEST_ASSERT(completed_upload.file_crc32 == 0U);
+    FileId file_id = completed_upload.file_id;
 
     TEST_ASSERT(
         file_download_begin(&fixture.storage, &state.download, &file_id, name, (uint16_t)(sizeof(name) - 1U)) ==
@@ -434,8 +436,10 @@ static bool test_file_transfer_abort_all(void) {
     );
     TEST_ASSERT(file_upload_write(&state.upload, data, (uint32_t)(sizeof(data) - 1U)) == FILE_TRANSFER_OK);
 
-    FileId file_id;
-    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &file_id, NULL) == FILE_TRANSFER_OK);
+    CompletedFileUpload completed_upload;
+    TEST_ASSERT(file_upload_finish(&fixture.storage, &state.upload, &completed_upload) == FILE_TRANSFER_OK);
+
+    FileId file_id = completed_upload.file_id;
 
     TEST_ASSERT(
         file_download_begin(&fixture.storage, &state.download, &file_id, name, (uint16_t)(sizeof(name) - 1U)) ==

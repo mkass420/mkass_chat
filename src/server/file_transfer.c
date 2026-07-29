@@ -118,6 +118,7 @@ FileTransferResult file_upload_begin(
     upload->expected_size    = file_size;
     upload->running_crc32    = (uint32_t)crc32(0L, Z_NULL, 0);
     upload->last_activity_ms = file_transfer_monotonic_time_ms();
+    upload->file_name_len    = file_name_len;
 
     memcpy(upload->file_name, file_name, file_name_len);
 
@@ -182,13 +183,8 @@ FileTransferResult file_upload_write(FileUploadState* upload, const uint8_t* dat
     return FILE_TRANSFER_OK;
 }
 
-FileTransferResult file_upload_finish(
-    FileStorage*     storage,
-    FileUploadState* upload,
-    FileId*          completed_file_id,
-    uint32_t*        completed_crc32
-) {
-    if(storage == NULL || upload == NULL || completed_file_id == NULL) {
+FileTransferResult file_upload_finish(FileStorage* storage, FileUploadState* upload, CompletedFileUpload* completed) {
+    if(storage == NULL || upload == NULL || completed == NULL) {
         return FILE_TRANSFER_INVALID_ARGUMENT;
     }
 
@@ -199,9 +195,6 @@ FileTransferResult file_upload_finish(
     if(upload->committed_size != upload->expected_size) {
         return FILE_TRANSFER_INCOMPLETE;
     }
-
-    const FileId   file_id    = upload->file_id;
-    const uint32_t file_crc32 = upload->running_crc32;
 
     if(fsync(upload->file_fd) != 0) {
         const int saved_errno = errno;
@@ -215,7 +208,7 @@ FileTransferResult file_upload_finish(
         const int saved_errno = errno;
 
         upload->file_fd = -1;
-        (void)file_storage_abort(storage, &file_id);
+        (void)file_storage_abort(storage, &upload->file_id);
         file_upload_state_reset(upload);
         errno = saved_errno;
         return FILE_TRANSFER_STORAGE_ERROR;
@@ -223,21 +216,22 @@ FileTransferResult file_upload_finish(
 
     upload->file_fd = -1;
 
-    if(file_storage_finalize(storage, &file_id) != 0) {
+    if(file_storage_finalize(storage, &upload->file_id) != 0) {
         const int saved_errno = errno;
 
-        (void)file_storage_abort(storage, &file_id);
-        (void)file_storage_remove_object(storage, &file_id);
+        (void)file_storage_abort(storage, &upload->file_id);
+        (void)file_storage_remove_object(storage, &upload->file_id);
         file_upload_state_reset(upload);
         errno = saved_errno;
         return FILE_TRANSFER_STORAGE_ERROR;
     }
 
-    *completed_file_id = file_id;
+    completed->file_id       = upload->file_id;
+    completed->file_size     = upload->expected_size;
+    completed->file_crc32    = upload->running_crc32;
+    completed->file_name_len = upload->file_name_len;
 
-    if(completed_crc32 != NULL) {
-        *completed_crc32 = file_crc32;
-    }
+    memcpy(completed->file_name, upload->file_name, (size_t)upload->file_name_len + 1U);
 
     file_upload_state_reset(upload);
 
@@ -301,6 +295,7 @@ FileTransferResult file_download_begin(
     download->file_fd          = file_fd;
     download->file_size        = (uint64_t)file_stat.st_size;
     download->last_activity_ms = file_transfer_monotonic_time_ms();
+    download->file_name_len    = file_name_len;
 
     memcpy(download->file_name, file_name, file_name_len);
 

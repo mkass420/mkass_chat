@@ -44,7 +44,7 @@ static int parse_port(const char* text, uint16_t* port) {
     }
 
     char* end = NULL;
-    errno = 0;
+    errno     = 0;
 
     const unsigned long value = strtoul(text, &end, 10);
 
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     }
 
     const char* bind_address = DEFAULT_BIND_ADDRESS;
-    uint16_t port = DEFAULT_SERVER_PORT;
+    uint16_t    port         = DEFAULT_SERVER_PORT;
 
     if(argc >= 2) {
         bind_address = argv[1];

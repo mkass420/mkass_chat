@@ -191,6 +191,68 @@ static void server_handle_client_event(ServerState* server, ClientConnection* co
     }
 }
 
+static int server_database_init(ServerState* server) {
+    sqlite3* db = NULL;
+
+    const int open_result =
+        sqlite3_open_v2(SERVER_DATABASE_PATH, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+
+    if(open_result != SQLITE_OK) {
+        fprintf(stderr, "Database open failed: %s\n", db != NULL ? sqlite3_errmsg(db) : "unknown SQLite error");
+
+        if(db != NULL) {
+            (void)sqlite3_close(db);
+        }
+
+        errno = EIO;
+        return -1;
+    }
+
+    if(sqlite3_busy_timeout(db, SERVER_DATABASE_BUSY_TIMEOUT_MS) != SQLITE_OK) {
+        fprintf(stderr, "Database busy timeout failed: %s\n", sqlite3_errmsg(db));
+
+        (void)sqlite3_close(db);
+
+        errno = EIO;
+        return -1;
+    }
+
+    const FileRepositoryResult repository_result = file_repository_init(&server->file_repository, db);
+
+    if(repository_result != FILE_REPOSITORY_OK) {
+        fprintf(stderr, "File repository init failed: %s\n", file_repository_result_to_string(repository_result));
+
+        file_repository_destroy(&server->file_repository);
+
+        (void)sqlite3_close(db);
+
+        errno = EIO;
+        return -1;
+    }
+
+    server->db = db;
+
+    return 0;
+}
+
+static void server_database_destroy(ServerState* server) {
+    if(server == NULL) {
+        return;
+    }
+
+    file_repository_destroy(&server->file_repository);
+
+    if(server->db != NULL) {
+        const int close_result = sqlite3_close(server->db);
+
+        if(close_result != SQLITE_OK) {
+            fprintf(stderr, "Database close failed: %s\n", sqlite3_errmsg(server->db));
+        }
+
+        server->db = NULL;
+    }
+}
+
 int server_init(ServerState* server, const char* bind_address, uint16_t port) {
     if(server == NULL || port == 0U) {
         errno = EINVAL;
@@ -204,6 +266,7 @@ int server_init(ServerState* server, const char* bind_address, uint16_t port) {
     server->server_socket = -1;
 
     file_storage_reset(&server->file_storage);
+    file_repository_reset(&server->file_repository);
 
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
         connection_slot_init(&server->connections[i]);
@@ -299,6 +362,18 @@ int server_init(ServerState* server, const char* bind_address, uint16_t port) {
         return -1;
     }
 
+    if(server_database_init(server) != 0) {
+        const int saved_errno = errno;
+
+        file_storage_destroy(&server->file_storage);
+
+        (void)close(epoll_fd);
+        (void)close(listener_fd);
+
+        errno = saved_errno;
+        return -1;
+    }
+
     server->server_socket = listener_fd;
     server->epoll_fd      = epoll_fd;
 
@@ -353,10 +428,13 @@ void server_destroy(ServerState* server) {
         server_close_connection(server, &server->connections[i]);
     }
 
+    server_database_destroy(server);
+
     file_storage_destroy(&server->file_storage);
 
     if(server->server_socket >= 0) {
         (void)close(server->server_socket);
+
         server->server_socket = -1;
     }
 
@@ -364,7 +442,4 @@ void server_destroy(ServerState* server) {
         (void)close(server->epoll_fd);
         server->epoll_fd = -1;
     }
-
-    // Базу данных позже закрывает отдельный модуль.
-    server->db = NULL;
 }

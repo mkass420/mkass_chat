@@ -39,5 +39,7 @@ void register_transport_tests(TestSuite* suite);
 void register_connection_tests(TestSuite* suite);
 void register_dispatcher_tests(TestSuite* suite);
 void register_file_tests(TestSuite* suite);
+void register_file_repository_tests(TestSuite* suite);
+void register_file_handler_tests(TestSuite* suite);
 
 #endif
