@@ -3,9 +3,10 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 
-typedef void (*TestFunction)(void);
+#define TEST_MAX_CASES 256U
+
+typedef bool (*TestFunction)(void);
 
 typedef struct {
     const char*  name;
@@ -13,62 +14,30 @@ typedef struct {
 } TestCase;
 
 typedef struct {
-    TestCase cases[128];
+    TestCase cases[TEST_MAX_CASES];
     size_t   count;
 } TestSuite;
 
+bool test_fail(const char* expression, const char* file, int line);
 void test_suite_add(TestSuite* suite, const char* name, TestFunction function);
 int  test_suite_run(const TestSuite* suite);
 
-bool test_assert_true_impl(bool value, const char* expression, const char* file, int line);
-bool test_assert_int_impl(long long expected, long long actual, const char* file, int line);
-bool test_assert_u64_impl(uint64_t expected, uint64_t actual, const char* file, int line);
-bool test_assert_string_impl(const char* expected, const char* actual, const char* file, int line);
-bool test_assert_memory_impl(const void* expected, const void* actual, size_t size, const char* file, int line);
-
 #define TEST_ADD(suite, function) test_suite_add((suite), #function, (function))
 
-#define TEST_ASSERT(expression)                                                                                      \
-    do {                                                                                                             \
-        if(!test_assert_true_impl((expression), #expression, __FILE__, __LINE__)) {                                  \
-            return;                                                                                                  \
-        }                                                                                                            \
-    } while(0)
-
-#define TEST_ASSERT_EQ_INT(expected, actual)                                                                         \
-    do {                                                                                                             \
-        if(!test_assert_int_impl((long long)(expected), (long long)(actual), __FILE__, __LINE__)) {                  \
-            return;                                                                                                  \
-        }                                                                                                            \
-    } while(0)
-
-#define TEST_ASSERT_EQ_U64(expected, actual)                                                                         \
-    do {                                                                                                             \
-        if(!test_assert_u64_impl((uint64_t)(expected), (uint64_t)(actual), __FILE__, __LINE__)) {                    \
-            return;                                                                                                  \
-        }                                                                                                            \
-    } while(0)
-
-#define TEST_ASSERT_EQ_SIZE(expected, actual) TEST_ASSERT_EQ_U64((expected), (actual))
-#define TEST_ASSERT_EQ_U32(expected, actual) TEST_ASSERT_EQ_U64((expected), (actual))
-
-#define TEST_ASSERT_EQ_STRING(expected, actual)                                                                      \
-    do {                                                                                                             \
-        if(!test_assert_string_impl((expected), (actual), __FILE__, __LINE__)) {                                     \
-            return;                                                                                                  \
-        }                                                                                                            \
-    } while(0)
-
-#define TEST_ASSERT_MEMORY(expected, actual, size)                                                                   \
-    do {                                                                                                             \
-        if(!test_assert_memory_impl((expected), (actual), (size), __FILE__, __LINE__)) {                             \
-            return;                                                                                                  \
-        }                                                                                                            \
+#define TEST_ASSERT(expression)                                \
+    do {                                                       \
+        if(!(expression)) {                                    \
+            return test_fail(#expression, __FILE__, __LINE__); \
+        }                                                      \
     } while(0)
 
 void register_protocol_tests(TestSuite* suite);
 void register_frame_tests(TestSuite* suite);
-void register_session_tests(TestSuite* suite);
+void register_binary_tests(TestSuite* suite);
+void register_file_protocol_tests(TestSuite* suite);
+void register_transport_tests(TestSuite* suite);
+void register_connection_tests(TestSuite* suite);
 void register_dispatcher_tests(TestSuite* suite);
+void register_file_tests(TestSuite* suite);
 
 #endif

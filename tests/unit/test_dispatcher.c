@@ -1,137 +1,219 @@
+#define _GNU_SOURCE
+
 #include "test.h"
 
 #include "server/dispatcher.h"
 
 #include <string.h>
+#include <sys/mman.h>
 
-static ParsedFrame make_request(
-    MessageType type,
-    uint32_t request_id,
-    const uint8_t* payload,
-    uint32_t payload_len
-) {
-    ParsedFrame frame = {
-        .header = {
-            .magic            = PROTOCOL_MAGIC,
-            .type             = type,
-            .flags            = 0U,
-            .request_id       = request_id,
-            .uncompressed_len = payload_len,
-            .payload_len      = payload_len,
-            .payload_crc32    = 0U,
-        },
-        .payload = payload,
-        .frame_size = PACKET_HEADER_WIRE_SIZE + (size_t)payload_len,
-    };
+typedef struct {
+    ServerState*          server;
+    ClientConnection      connection;
+    ServerDispatchContext dispatch;
+} DispatcherFixture;
 
-    return frame;
-}
-
-static ParsedFrame parse_queued_frame(const ClientSession* session) {
-    ParsedFrame frame = {0};
-    const FrameParseResult result = frame_try_parse(session->write_buffer, session->write_bytes, &frame);
-
-    if(result != FRAME_PARSE_COMPLETE) {
-        frame.frame_size = 0U;
+static bool dispatcher_fixture_init(DispatcherFixture* fixture) {
+    if(fixture == NULL) {
+        return false;
     }
 
-    return frame;
+    memset(fixture, 0, sizeof(*fixture));
+
+    fixture->server = mmap(NULL, sizeof(*fixture->server), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    if(fixture->server == MAP_FAILED) {
+        fixture->server = NULL;
+        return false;
+    }
+
+    connection_slot_init(&fixture->connection);
+    connection_open(&fixture->connection, 10);
+
+    fixture->dispatch.server     = fixture->server;
+    fixture->dispatch.connection = &fixture->connection;
+
+    return true;
 }
 
-static void test_dispatcher_ping(void) {
-    int dummy_context = 1;
-    ClientSession session;
-    session_init(&session, 10);
+static void dispatcher_fixture_destroy(DispatcherFixture* fixture) {
+    if(fixture == NULL) {
+        return;
+    }
 
-    const ParsedFrame request = make_request(MSG_TYPE_PING_REQUEST, 1U, NULL, 0U);
-
-    TEST_ASSERT_EQ_INT(
-        SESSION_IO_OK, server_dispatch_frame(&dummy_context, &session, &request)
-    );
-
-    const ParsedFrame response = parse_queued_frame(&session);
-
-    TEST_ASSERT(response.frame_size != 0U);
-    TEST_ASSERT_EQ_INT(MSG_TYPE_PING_RESPONSE, response.header.type);
-    TEST_ASSERT_EQ_U32(1U, response.header.request_id);
-    TEST_ASSERT_EQ_U32(0U, response.header.payload_len);
+    if(fixture->server != NULL) {
+        (void)munmap(fixture->server, sizeof(*fixture->server));
+        fixture->server = NULL;
+    }
 }
 
-static void test_dispatcher_echo(void) {
-    int dummy_context = 1;
+static DecodedFrame make_request(MessageType type, uint32_t request_id, const uint8_t* payload, uint32_t payload_len) {
+    return (DecodedFrame){
+        .header =
+            {
+                     .magic            = PROTOCOL_MAGIC,
+                     .type             = type,
+                     .flags            = 0U,
+                     .request_id       = request_id,
+                     .uncompressed_len = payload_len,
+                     .payload_len      = payload_len,
+                     .payload_crc32    = 0U,
+                     },
+        .payload     = payload,
+        .payload_len = payload_len,
+    };
+}
+
+static bool decode_queued_frame(DispatcherFixture* fixture, ParsedFrame* parsed, DecodedFrame* decoded) {
+    const TransportSession* transport = &fixture->connection.transport;
+
+    return frame_try_parse(transport->write_buffer, transport->write_bytes, parsed) == FRAME_PARSE_COMPLETE &&
+           frame_decode(&fixture->server->frame_codec, parsed, decoded) == FRAME_DECODE_OK;
+}
+
+static bool test_dispatcher_ping(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
+
+    const DecodedFrame      request = make_request(MSG_TYPE_PING_REQUEST, 1U, NULL, 0U);
+    const TransportIoResult result  = server_dispatch_frame(&fixture.dispatch, &request);
+
+    ParsedFrame  parsed;
+    DecodedFrame response;
+    const bool   decoded = decode_queued_frame(&fixture, &parsed, &response);
+
+    dispatcher_fixture_destroy(&fixture);
+
+    TEST_ASSERT(result == TRANSPORT_IO_OK);
+    TEST_ASSERT(decoded);
+    TEST_ASSERT(response.header.type == MSG_TYPE_PING_RESPONSE);
+    TEST_ASSERT(response.header.request_id == 1U);
+    TEST_ASSERT(response.payload_len == 0U);
+
+    return true;
+}
+
+static bool test_dispatcher_echo(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
+
     static const uint8_t payload[] = "echo payload";
-    ClientSession session;
-    session_init(&session, 10);
+    const DecodedFrame   request   = make_request(MSG_TYPE_ECHO_REQUEST, 2U, payload, (uint32_t)(sizeof(payload) - 1U));
 
-    const ParsedFrame request = make_request(
-        MSG_TYPE_ECHO_REQUEST, 2U, payload, (uint32_t)(sizeof(payload) - 1U)
-    );
+    const TransportIoResult result = server_dispatch_frame(&fixture.dispatch, &request);
 
-    TEST_ASSERT_EQ_INT(
-        SESSION_IO_OK, server_dispatch_frame(&dummy_context, &session, &request)
-    );
+    ParsedFrame  parsed;
+    DecodedFrame response;
+    const bool   decoded         = decode_queued_frame(&fixture, &parsed, &response);
+    const bool   payload_matches = decoded && response.payload_len == sizeof(payload) - 1U &&
+                                   memcmp(response.payload, payload, sizeof(payload) - 1U) == 0;
 
-    const ParsedFrame response = parse_queued_frame(&session);
+    dispatcher_fixture_destroy(&fixture);
 
-    TEST_ASSERT(response.frame_size != 0U);
-    TEST_ASSERT_EQ_INT(MSG_TYPE_ECHO_RESPONSE, response.header.type);
-    TEST_ASSERT_EQ_U32(2U, response.header.request_id);
-    TEST_ASSERT_MEMORY(payload, response.payload, sizeof(payload) - 1U);
+    TEST_ASSERT(result == TRANSPORT_IO_OK);
+    TEST_ASSERT(decoded);
+    TEST_ASSERT(response.header.type == MSG_TYPE_ECHO_RESPONSE);
+    TEST_ASSERT(response.header.request_id == 2U);
+    TEST_ASSERT(payload_matches);
+
+    return true;
 }
 
-static void test_dispatcher_unsupported_request(void) {
-    int dummy_context = 1;
-    static const uint8_t request_payload[] = "registration";
+static bool test_dispatcher_echo_uses_decoded_payload_length(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
+
+    uint8_t payload[2048];
+    memset(payload, 'Q', sizeof(payload));
+
+    DecodedFrame request            = make_request(MSG_TYPE_ECHO_REQUEST, 3U, payload, sizeof(payload));
+    request.header.flags            = PACKET_FLAG_COMPRESSED;
+    request.header.payload_len      = 32U;
+    request.header.uncompressed_len = sizeof(payload);
+
+    const TransportIoResult result = server_dispatch_frame(&fixture.dispatch, &request);
+
+    ParsedFrame  parsed;
+    DecodedFrame response;
+    const bool   decoded = decode_queued_frame(&fixture, &parsed, &response);
+    const bool   payload_matches =
+        decoded && response.payload_len == sizeof(payload) && memcmp(response.payload, payload, sizeof(payload)) == 0;
+
+    dispatcher_fixture_destroy(&fixture);
+
+    TEST_ASSERT(result == TRANSPORT_IO_OK);
+    TEST_ASSERT(decoded);
+    TEST_ASSERT(response.header.type == MSG_TYPE_ECHO_RESPONSE);
+    TEST_ASSERT(payload_matches);
+
+    return true;
+}
+
+static bool test_dispatcher_unsupported_request(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
+
+    static const uint8_t request_payload[]  = "registration";
     static const uint8_t expected_payload[] = "Message type is not implemented";
-    ClientSession session;
-    session_init(&session, 10);
+    const DecodedFrame   request =
+        make_request(MSG_TYPE_REGISTER_REQUEST, 4U, request_payload, (uint32_t)(sizeof(request_payload) - 1U));
 
-    const ParsedFrame request = make_request(
-        MSG_TYPE_REGISTER_REQUEST, 3U, request_payload, (uint32_t)(sizeof(request_payload) - 1U)
-    );
+    const TransportIoResult result = server_dispatch_frame(&fixture.dispatch, &request);
 
-    TEST_ASSERT_EQ_INT(
-        SESSION_IO_OK, server_dispatch_frame(&dummy_context, &session, &request)
-    );
+    ParsedFrame  parsed;
+    DecodedFrame response;
+    const bool   decoded         = decode_queued_frame(&fixture, &parsed, &response);
+    const bool   payload_matches = decoded && response.payload_len == sizeof(expected_payload) - 1U &&
+                                   memcmp(response.payload, expected_payload, sizeof(expected_payload) - 1U) == 0;
 
-    const ParsedFrame response = parse_queued_frame(&session);
+    dispatcher_fixture_destroy(&fixture);
 
-    TEST_ASSERT(response.frame_size != 0U);
-    TEST_ASSERT_EQ_INT(MSG_TYPE_ERROR_RESPONSE, response.header.type);
-    TEST_ASSERT_EQ_U32(3U, response.header.request_id);
-    TEST_ASSERT_EQ_U32(sizeof(expected_payload) - 1U, response.header.payload_len);
-    TEST_ASSERT_MEMORY(expected_payload, response.payload, sizeof(expected_payload) - 1U);
+    TEST_ASSERT(result == TRANSPORT_IO_OK);
+    TEST_ASSERT(decoded);
+    TEST_ASSERT(response.header.type == MSG_TYPE_ERROR_RESPONSE);
+    TEST_ASSERT(response.header.request_id == 4U);
+    TEST_ASSERT(payload_matches);
+
+    return true;
 }
 
-static void test_dispatcher_rejects_server_message(void) {
-    int dummy_context = 1;
-    ClientSession session;
-    session_init(&session, 10);
+static bool test_dispatcher_rejects_server_message(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
 
-    const ParsedFrame response = make_request(MSG_TYPE_PING_RESPONSE, 4U, NULL, 0U);
+    const DecodedFrame      response     = make_request(MSG_TYPE_PING_RESPONSE, 5U, NULL, 0U);
+    const TransportIoResult result       = server_dispatch_frame(&fixture.dispatch, &response);
+    const size_t            queued_bytes = fixture.connection.transport.write_bytes;
 
-    TEST_ASSERT_EQ_INT(
-        SESSION_IO_PROTOCOL_ERROR, server_dispatch_frame(&dummy_context, &session, &response)
-    );
-    TEST_ASSERT_EQ_SIZE(0U, session.write_bytes);
+    dispatcher_fixture_destroy(&fixture);
+
+    TEST_ASSERT(result == TRANSPORT_IO_PROTOCOL_ERROR);
+    TEST_ASSERT(queued_bytes == 0U);
+
+    return true;
 }
 
-static void test_dispatcher_propagates_queue_error(void) {
-    int dummy_context = 1;
-    ClientSession session;
-    session_init(&session, 10);
-    session.write_bytes = sizeof(session.write_buffer);
+static bool test_dispatcher_propagates_queue_error(void) {
+    DispatcherFixture fixture;
+    TEST_ASSERT(dispatcher_fixture_init(&fixture));
 
-    const ParsedFrame request = make_request(MSG_TYPE_PING_REQUEST, 5U, NULL, 0U);
+    fixture.connection.transport.write_offset = 0U;
+    fixture.connection.transport.write_bytes  = sizeof(fixture.connection.transport.write_buffer);
 
-    TEST_ASSERT_EQ_INT(
-        SESSION_IO_BUFFER_FULL, server_dispatch_frame(&dummy_context, &session, &request)
-    );
+    const DecodedFrame      request = make_request(MSG_TYPE_PING_REQUEST, 6U, NULL, 0U);
+    const TransportIoResult result  = server_dispatch_frame(&fixture.dispatch, &request);
+
+    dispatcher_fixture_destroy(&fixture);
+
+    TEST_ASSERT(result == TRANSPORT_IO_BUFFER_FULL);
+
+    return true;
 }
 
 void register_dispatcher_tests(TestSuite* suite) {
     TEST_ADD(suite, test_dispatcher_ping);
     TEST_ADD(suite, test_dispatcher_echo);
+    TEST_ADD(suite, test_dispatcher_echo_uses_decoded_payload_length);
     TEST_ADD(suite, test_dispatcher_unsupported_request);
     TEST_ADD(suite, test_dispatcher_rejects_server_message);
     TEST_ADD(suite, test_dispatcher_propagates_queue_error);

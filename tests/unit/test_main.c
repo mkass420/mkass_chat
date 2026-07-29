@@ -1,100 +1,58 @@
 #include "test.h"
 
 #include <stdio.h>
-#include <string.h>
 
-static bool current_test_failed = false;
+bool test_fail(const char* expression, const char* file, int line) {
+    fprintf(stderr, "\n       %s:%d: assertion failed: %s", file, line, expression);
+
+    return false;
+}
 
 void test_suite_add(TestSuite* suite, const char* name, TestFunction function) {
-    if(suite == NULL || name == NULL || function == NULL || suite->count >= 128U) {
+    if(suite == NULL || name == NULL || function == NULL || suite->count >= TEST_MAX_CASES) {
         return;
     }
 
-    suite->cases[suite->count].name     = name;
-    suite->cases[suite->count].function = function;
+    suite->cases[suite->count] = (TestCase){
+        .name     = name,
+        .function = function,
+    };
+
     ++suite->count;
 }
 
-static void test_fail_prefix(const char* file, int line) {
-    current_test_failed = true;
-    fprintf(stderr, "\n       %s:%d: ", file, line);
-}
-
-bool test_assert_true_impl(bool value, const char* expression, const char* file, int line) {
-    if(value) {
-        return true;
-    }
-
-    test_fail_prefix(file, line);
-    fprintf(stderr, "условие не выполнено: %s", expression);
-    return false;
-}
-
-bool test_assert_int_impl(long long expected, long long actual, const char* file, int line) {
-    if(expected == actual) {
-        return true;
-    }
-
-    test_fail_prefix(file, line);
-    fprintf(stderr, "ожидалось %lld, получено %lld", expected, actual);
-    return false;
-}
-
-bool test_assert_u64_impl(uint64_t expected, uint64_t actual, const char* file, int line) {
-    if(expected == actual) {
-        return true;
-    }
-
-    test_fail_prefix(file, line);
-    fprintf(stderr, "ожидалось %llu, получено %llu", (unsigned long long)expected, (unsigned long long)actual);
-    return false;
-}
-
-bool test_assert_string_impl(const char* expected, const char* actual, const char* file, int line) {
-    if(expected != NULL && actual != NULL && strcmp(expected, actual) == 0) {
-        return true;
-    }
-
-    test_fail_prefix(file, line);
-    fprintf(
-        stderr, "ожидалась строка \"%s\", получена \"%s\"", expected == NULL ? "(null)" : expected,
-        actual == NULL ? "(null)" : actual
-    );
-    return false;
-}
-
-bool test_assert_memory_impl(const void* expected, const void* actual, size_t size, const char* file, int line) {
-    if(expected != NULL && actual != NULL && memcmp(expected, actual, size) == 0) {
-        return true;
-    }
-
-    test_fail_prefix(file, line);
-    fprintf(stderr, "блоки памяти отличаются, размер %zu", size);
-    return false;
-}
-
 int test_suite_run(const TestSuite* suite) {
+    if(suite == NULL) {
+        return 1;
+    }
+
     size_t passed = 0U;
     size_t failed = 0U;
 
     for(size_t i = 0U; i < suite->count; ++i) {
-        current_test_failed = false;
-        printf("[%02zu/%02zu] %s", i + 1U, suite->count, suite->cases[i].name);
+        const TestCase* test = &suite->cases[i];
+
+        printf("[%02zu/%02zu] %s", i + 1U, suite->count, test->name);
+
         fflush(stdout);
 
-        suite->cases[i].function();
-
-        if(current_test_failed) {
-            ++failed;
-            printf(" ... FAIL\n");
-        }
-        else {
+        if(test->function()) {
             ++passed;
             printf(" ... OK\n");
         }
+        else {
+            ++failed;
+            printf(" ... FAIL\n");
+        }
     }
 
-    printf("\nУспешно: %zu\nОшибок:  %zu\nВсего:   %zu\n", passed, failed, suite->count);
+    printf(
+        "\nУспешно: %zu\n"
+        "Ошибок:  %zu\n"
+        "Всего:   %zu\n",
+        passed, failed, suite->count
+    );
+
     return failed == 0U ? 0 : 1;
 }
 
@@ -103,8 +61,12 @@ int main(void) {
 
     register_protocol_tests(&suite);
     register_frame_tests(&suite);
-    register_session_tests(&suite);
+    register_binary_tests(&suite);
+    register_file_protocol_tests(&suite);
+    register_transport_tests(&suite);
+    register_connection_tests(&suite);
     register_dispatcher_tests(&suite);
+    register_file_tests(&suite);
 
     return test_suite_run(&suite);
 }

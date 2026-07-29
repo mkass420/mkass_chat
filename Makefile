@@ -6,25 +6,28 @@ LDLIBS = -lz -lsqlite3
 
 COMMON_SRC = \
 	src/common/protocol.c \
-	src/common/frame.c
+	src/common/frame.c \
+	src/common/binary.c \
+	src/common/file_protocol.c \
+	src/common/file_id.c
 
 SERVER_CORE_SRC = \
 	src/server/transport.c \
 	src/server/connection.c \
-	src/server/dispatcher.c
-
-SERVER_SRC = \
-	src/server/main.c \
-	src/server/server.c \
-	$(SERVER_CORE_SRC) \
-	$(COMMON_SRC)
+	src/server/dispatcher.c \
+	src/server/file_storage.c \
+	src/server/file_transfer.c
 
 UNIT_TEST_SRC = \
 	tests/unit/test_main.c \
 	tests/unit/test_protocol.c \
 	tests/unit/test_frame.c \
-	tests/unit/test_session.c \
+	tests/unit/test_binary.c \
+	tests/unit/test_file_protocol.c \
+	tests/unit/test_transport.c \
+	tests/unit/test_connection.c \
 	tests/unit/test_dispatcher.c \
+	tests/unit/test_file_modules.c \
 	$(SERVER_CORE_SRC) \
 	$(COMMON_SRC)
 
