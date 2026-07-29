@@ -65,14 +65,16 @@ test-unit-sanitize: build
 		-fsanitize=address,undefined $(UNIT_TEST_SRC) -o build/unit-tests-sanitize $(LDLIBS)
 	ASAN_OPTIONS=detect_leaks=1 ./build/unit-tests-sanitize
 
+.PHONY: test-integration
+
 test-integration: server
-	@mkdir -p build
-	@./build/chat-server 127.0.0.1 5555 \
+	@rm -rf build/integration-runtime
+	@mkdir -p build/integration-runtime
+	@(cd build/integration-runtime && exec ../chat-server 127.0.0.1 5555) \
 		> build/integration-server.log 2>&1 & \
 	server_pid=$$!; \
 	trap 'kill -TERM $$server_pid 2>/dev/null || true; wait $$server_pid 2>/dev/null || true' EXIT; \
-	sleep 0.5; \
-	python3 tests/integration/test_transport.py \
+	python3 tests/integration/run_tests.py \
 		--host 127.0.0.1 \
 		--port 5555
 
