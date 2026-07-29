@@ -12,11 +12,11 @@
 
 // Глобальное состояние сервера
 typedef struct {
-    sqlite3*   db;            // Указатель на открытую БД
-    int        epoll_fd;      // Дескриптор epoll для мультиплексирования
-    int        server_socket; // Слушающий сокет сервера
-    FrameCodec frame_codec;   // Кодек
-    // FileStorage file_storage;
+    sqlite3*         db;            // Указатель на открытую БД
+    int              epoll_fd;      // Дескриптор epoll для мультиплексирования
+    int              server_socket; // Слушающий сокет сервера
+    FrameCodec       frame_codec;   // Кодек
+    FileStorage      file_storage;
     ClientConnection connections[SERVER_MAX_CONNECTIONS]; // Массив со всеми активными TCP соединениями
 } ServerState;
 

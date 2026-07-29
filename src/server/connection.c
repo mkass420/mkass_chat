@@ -3,6 +3,7 @@
 void connection_reset(ClientConnection* connection) {
     assert(connection != NULL);
 
+    file_transfer_state_init(&connection->files);
     transport_reset(&connection->transport);
     connection->user_id = 0U;
 }
@@ -28,6 +29,7 @@ void connection_slot_init(ClientConnection* connection) {
     connection->generation = 0U;
     connection->user_id    = 0U;
 
+    file_transfer_state_init(&connection->files);
     transport_reset(&connection->transport);
 }
 

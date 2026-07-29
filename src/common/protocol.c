@@ -93,6 +93,15 @@ static bool payload_length_matches_policy(PayloadPolicy policy, uint32_t payload
     }
 }
 
+static bool compression_matches_policy(FrameCompressionPolicy policy, bool compressed) {
+    switch(policy) {
+        case COMPRESSION_POLICY_NEVER: return !compressed;
+        case COMPRESSION_POLICY_TRY: return true;
+        case COMPRESSION_POLICY_REQUIRE: return compressed;
+        default: return false;
+    }
+}
+
 static bool request_id_is_valid(const MessageTypeInfo* info, uint32_t request_id) {
     const bool is_event    = (info->properties & MESSAGE_PROPERTY_EVENT) != 0U;
     const bool is_request  = (info->properties & MESSAGE_PROPERTY_REQUEST) != 0U;
@@ -160,18 +169,22 @@ PacketHeaderValidationResult packet_header_validate(const PacketHeader* header) 
         return PACKET_HEADER_INVALID_UNCOMPRESSED_LENGTH;
     }
 
-    if(!payload_length_matches_policy(info->payload_policy, header->payload_len)) {
+    if(!payload_length_matches_policy(info->payload_policy, header->uncompressed_len)) {
         return PACKET_HEADER_INVALID_PAYLOAD_POLICY;
     }
 
     const bool is_compressed = (header->flags & PACKET_FLAG_COMPRESSED) != 0U;
+
+    if(!compression_matches_policy(info->compression_policy, is_compressed)) {
+        return PACKET_HEADER_INVALID_COMPRESSION_POLICY;
+    }
 
     if(!is_compressed && header->payload_len != header->uncompressed_len) {
         return PACKET_HEADER_INVALID_UNCOMPRESSED_LENGTH;
     }
 
     if(header->payload_len == 0U) {
-        if(header->uncompressed_len != 0U) {
+        if(!is_compressed && header->payload_len != header->uncompressed_len) {
             return PACKET_HEADER_INVALID_UNCOMPRESSED_LENGTH;
         }
         if(header->payload_crc32 != 0U) {
@@ -197,6 +210,7 @@ const char* packet_header_validation_result_to_string(PacketHeaderValidationResu
         case PACKET_HEADER_INVALID_UNCOMPRESSED_LENGTH: return "invalid uncompressed length";
         case PACKET_HEADER_INVALID_PAYLOAD_POLICY: return "payload does not match message policy";
         case PACKET_HEADER_INVALID_CRC: return "invalid payload CRC";
+        case PACKET_HEADER_INVALID_COMPRESSION_POLICY: return "compression does not match message policy";
         default: return "unknown header validation result";
     }
 }

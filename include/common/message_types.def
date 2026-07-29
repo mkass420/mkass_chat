@@ -199,6 +199,108 @@ MESSAGE_TYPE(
     "Серверное событие удаления существующего текстового сообщения"
 )
 
+/* Files */
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_BEGIN_REQUEST,
+    40,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
+    "Запрос начала загрузки файла на сервер"
+)
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_BEGIN_RESPONSE,
+    41,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
+    "Подтверждение готовности сервера принимать файл"
+)
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_CHUNK_REQUEST,
+    42,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
+    "Запрос записи следующего чанка загружаемого файла"
+)
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_CHUNK_RESPONSE,
+    43,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
+    "Подтверждение записи очередного чанка файла"
+)
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_FINISH_REQUEST,
+    44,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
+    "Запрос завершения загрузки файла"
+)
+
+MESSAGE_TYPE(
+    FILE_UPLOAD_FINISH_RESPONSE,
+    45,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
+    "Ответ с идентификатором успешно загруженного файла"
+)
+
+MESSAGE_TYPE(
+    FILE_DOWNLOAD_BEGIN_REQUEST,
+    46,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
+    "Запрос начала скачивания файла"
+)
+
+MESSAGE_TYPE(
+    FILE_DOWNLOAD_BEGIN_RESPONSE,
+    47,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_NEVER,
+    "Ответ с метаданными скачиваемого файла"
+)
+
+MESSAGE_TYPE(
+    FILE_DOWNLOAD_CHUNK_REQUEST,
+    48,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_REQUEST,
+    PAYLOAD_POLICY_EMPTY,
+    COMPRESSION_POLICY_NEVER,
+    "Запрос следующего чанка скачиваемого файла"
+)
+
+MESSAGE_TYPE(
+    FILE_DOWNLOAD_CHUNK_RESPONSE,
+    49,
+    MESSAGE_PROPERTY_VALID |
+        MESSAGE_PROPERTY_RESPONSE,
+    PAYLOAD_POLICY_REQUIRED,
+    COMPRESSION_POLICY_TRY,
+    "Ответ с очередным чанком скачиваемого файла"
+)
+
 /* Errors */
 
 MESSAGE_TYPE(

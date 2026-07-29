@@ -8,58 +8,52 @@
 #include <stdint.h>
 
 static TransportIoResult handle_ping_request(
-    ServerState*       server,
-    ClientConnection*  connection,
-    const ParsedFrame* request
+    ServerState*        server,
+    ClientConnection*   connection,
+    const DecodedFrame* request
 ) {
-    (void)server;
-    return transport_queue_frame(&connection->transport, MSG_TYPE_PING_RESPONSE, request->header.request_id, NULL, 0U);
+    return transport_queue_frame(
+        &connection->transport, &server->frame_codec, MSG_TYPE_PING_RESPONSE, request->header.request_id, NULL, 0U
+    );
 }
 
 static TransportIoResult handle_echo_request(
-    ServerState*       server,
-    ClientConnection*  connection,
-    const ParsedFrame* request
+    ServerState*        server,
+    ClientConnection*   connection,
+    const DecodedFrame* request
 ) {
-    (void)server;
     return transport_queue_frame(
-        &connection->transport, MSG_TYPE_ECHO_RESPONSE, request->header.request_id, request->payload,
-        request->header.payload_len
+        &connection->transport, &server->frame_codec, MSG_TYPE_ECHO_RESPONSE, request->header.request_id,
+        request->payload, request->payload_len
     );
 }
 
 static TransportIoResult handle_unsupported_request(
-    ServerState*       server,
-    ClientConnection*  connection,
-    const ParsedFrame* request
+    ServerState*        server,
+    ClientConnection*   connection,
+    const DecodedFrame* request
 ) {
-    (void)server;
-
     static const uint8_t error_payload[] = "Message type is not implemented";
 
     return transport_queue_frame(
-        &connection->transport, MSG_TYPE_ERROR_RESPONSE, request->header.request_id, error_payload,
-        (uint32_t)(sizeof(error_payload) - 1U)
+        &connection->transport, &server->frame_codec, MSG_TYPE_ERROR_RESPONSE, request->header.request_id,
+        error_payload, (uint32_t)(sizeof(error_payload) - 1U)
     );
 }
 
-TransportIoResult server_dispatch_frame(void* context, const ParsedFrame* frame) {
+TransportIoResult server_dispatch_frame(void* context, const DecodedFrame* frame) {
     assert(context != NULL);
     assert(frame != NULL);
 
     ServerDispatchContext* dispatch = context;
-
-    ServerState* server = dispatch->server;
-
-    ClientConnection* connection = dispatch->connection;
 
     if(!message_type_is_allowed_from_client(frame->header.type)) {
         return TRANSPORT_IO_PROTOCOL_ERROR;
     }
 
     switch(frame->header.type) {
-        case MSG_TYPE_PING_REQUEST: return handle_ping_request(server, connection, frame);
-        case MSG_TYPE_ECHO_REQUEST: return handle_echo_request(server, connection, frame);
-        default: return handle_unsupported_request(server, connection, frame);
+        case MSG_TYPE_PING_REQUEST: return handle_ping_request(dispatch->server, dispatch->connection, frame);
+        case MSG_TYPE_ECHO_REQUEST: return handle_echo_request(dispatch->server, dispatch->connection, frame);
+        default: return handle_unsupported_request(dispatch->server, dispatch->connection, frame);
     }
 }

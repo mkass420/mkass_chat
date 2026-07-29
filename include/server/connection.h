@@ -1,7 +1,7 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
-#include "common/file.h"
+#include "server/file_transfer.h"
 #include "server/transport.h"
 
 #include <stdint.h>

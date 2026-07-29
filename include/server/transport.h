@@ -28,7 +28,7 @@ typedef struct {
     size_t  write_bytes;                               // Общий объем данных в буфере записи
 } TransportSession;
 
-typedef TransportIoResult (*TransportFrameHandler)(void* context, const ParsedFrame* frame);
+typedef TransportIoResult (*TransportFrameHandler)(void* context, const DecodedFrame* frame);
 
 void transport_init(TransportSession* transport, int socket_fd);
 void transport_reset(TransportSession* transport);
@@ -38,6 +38,7 @@ bool transport_has_pending_write(const TransportSession* transport);
 
 TransportIoResult transport_queue_frame(
     TransportSession* transport,
+    FrameCodec*       codec,
     MessageType       type,
     uint32_t          request_id,
     const uint8_t*    payload,
@@ -45,10 +46,12 @@ TransportIoResult transport_queue_frame(
 );
 
 TransportIoResult transport_handle_read(
-    TransportSession*   transport,
-    TransportFrameHandler frame_handler,
-    void*               handler_context
+    TransportSession*     transport,
+    FrameCodec*           codec,
+    TransportFrameHandler handler,
+    void*                 context
 );
+
 TransportIoResult transport_handle_write(TransportSession* transport);
 
 #endif

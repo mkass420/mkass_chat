@@ -50,9 +50,7 @@ static void server_close_connection(ServerState* server, ClientConnection* conne
         (void)epoll_ctl(server->epoll_fd, EPOLL_CTL_DEL, socket_fd, NULL);
     }
 
-    // Здесь позже отменяются файловые передачи.
-    // file_transfer_abort_all(...);
-
+    file_transfer_abort_all(&server->file_storage, &connection->files);
     (void)close(socket_fd);
 
     connection_reset(connection);
@@ -94,6 +92,7 @@ static int server_add_client(ServerState* server, int client_fd) {
     if(epoll_ctl(server->epoll_fd, EPOLL_CTL_ADD, client_fd, &event) != 0) {
         const int saved_errno = errno;
 
+        file_transfer_abort_all(&server->file_storage, &connection->files);
         (void)close(client_fd);
         connection_reset(connection);
 
@@ -167,7 +166,7 @@ static void server_handle_client_event(ServerState* server, ClientConnection* co
             .connection = connection,
         };
 
-        result = transport_handle_read(transport, server_dispatch_frame, &dispatch_context);
+        result = transport_handle_read(transport, &server->frame_codec, server_dispatch_frame, &dispatch_context);
     }
 
     // Сразу отправляем подготовленный ответ.
@@ -203,6 +202,8 @@ int server_init(ServerState* server, const char* bind_address, uint16_t port) {
     server->db            = NULL;
     server->epoll_fd      = -1;
     server->server_socket = -1;
+
+    file_storage_reset(&server->file_storage);
 
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
         connection_slot_init(&server->connections[i]);
@@ -286,6 +287,18 @@ int server_init(ServerState* server, const char* bind_address, uint16_t port) {
         return -1;
     }
 
+    if(file_storage_init(&server->file_storage, "data/files") != 0) {
+        const int saved_errno = errno;
+
+        file_storage_destroy(&server->file_storage);
+
+        (void)close(epoll_fd);
+        (void)close(listener_fd);
+
+        errno = saved_errno;
+        return -1;
+    }
+
     server->server_socket = listener_fd;
     server->epoll_fd      = epoll_fd;
 
@@ -339,6 +352,8 @@ void server_destroy(ServerState* server) {
     for(size_t i = 0U; i < SERVER_MAX_CONNECTIONS; ++i) {
         server_close_connection(server, &server->connections[i]);
     }
+
+    file_storage_destroy(&server->file_storage);
 
     if(server->server_socket >= 0) {
         (void)close(server->server_socket);
