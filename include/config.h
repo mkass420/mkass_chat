@@ -11,6 +11,12 @@
 #define PACKET_KNOWN_FLAGS      PACKET_FLAG_COMPRESSED
 #define PACKET_HEADER_WIRE_SIZE 20U
 
+/* --- ERROR SETTINGS --- */
+
+#define ERROR_MESSAGE_MAX_LENGTH   512U
+#define ERROR_RESPONSE_PREFIX_SIZE (2U + 2U)
+#define ERROR_RESPONSE_MAX_SIZE    (ERROR_RESPONSE_PREFIX_SIZE + ERROR_MESSAGE_MAX_LENGTH)
+
 /* --- FILE SETTINGS --- */
 #define FILE_MAX_SIZE        (128ULL * 1024ULL * 1024ULL) // Максимальный размер всего файлв
 #define FILE_CHUNK_DATA_SIZE (60U * 1024U)                // Максимальное количество байт файла в одном сообщении

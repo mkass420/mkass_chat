@@ -8,6 +8,7 @@ COMMON_SRC = \
 	src/common/protocol.c \
 	src/common/frame.c \
 	src/common/binary.c \
+	src/common/error_protocol.c \
 	src/common/file_protocol.c \
 	src/common/file_id.c
 
@@ -39,6 +40,7 @@ UNIT_TEST_SRC = \
 	tests/unit/test_file_modules.c \
 	tests/unit/test_file_repository.c \
 	tests/unit/test_file_handlers.c \
+	tests/unit/test_error_protocol.c \
 	$(SERVER_CORE_SRC) \
 	$(COMMON_SRC)
 

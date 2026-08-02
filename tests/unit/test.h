@@ -41,5 +41,6 @@ void register_dispatcher_tests(TestSuite* suite);
 void register_file_tests(TestSuite* suite);
 void register_file_repository_tests(TestSuite* suite);
 void register_file_handler_tests(TestSuite* suite);
+void register_error_protocol_tests(TestSuite* suite);
 
 #endif

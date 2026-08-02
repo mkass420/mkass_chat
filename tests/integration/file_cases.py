@@ -5,6 +5,10 @@ from dataclasses import dataclass
 
 from integration_common import TestCase, TestContext, require
 from protocol import (
+    ERROR_CODE_BUSY,
+    ERROR_CODE_INCOMPLETE,
+    ERROR_CODE_INVALID_STATE,
+    ERROR_CODE_NOT_FOUND,
     FILE_CHUNK_DATA_SIZE,
     FILE_ID_SIZE,
     FILE_MAX_NAME_LENGTH,
@@ -34,7 +38,7 @@ class DownloadResult:
 
 
 def _encode_upload_begin(file_name: bytes, file_size: int) -> bytes:
-    require(file_name, "Имя файла не должно быть пустым")
+    require(len(file_name) > 0, "Имя файла не должно быть пустым")
     require(
         len(file_name) <= FILE_MAX_NAME_LENGTH,
         "Имя файла превышает тестовый лимит",
@@ -165,7 +169,7 @@ def _download_file(context: TestContext, file_id: bytes) -> DownloadResult:
                 response.request_id == request_id,
                 "DOWNLOAD_CHUNK_RESPONSE потерял request_id",
             )
-            require(response.payload, "Сервер вернул пустой download chunk")
+            require(len(response.payload) > 0, "Сервер вернул пустой download chunk")
             require(
                 len(response.payload) <= FILE_CHUNK_DATA_SIZE,
                 "Download chunk превышает FILE_CHUNK_DATA_SIZE",
@@ -205,9 +209,8 @@ def make_file_tests(context: TestContext) -> list[TestCase]:
 
     def test_multichunk_compressed_file_round_trip() -> None:
         file_name = b"compressed-multichunk.dat"
-        data = (
-            b"compressible file block\x00" * 7_000
-            + deterministic_bytes(7_000, seed=b"file-tail")
+        data = b"compressible file block\x00" * 7_000 + deterministic_bytes(
+            7_000, seed=b"file-tail"
         )
         require(len(data) > FILE_CHUNK_DATA_SIZE * 2, "Тестовый файл слишком мал")
 
@@ -254,6 +257,7 @@ def make_file_tests(context: TestContext) -> list[TestCase]:
             assert_error_response(
                 recv_frame(sock),
                 expected_request_id=request_id,
+                expected_code=ERROR_CODE_NOT_FOUND,
                 contains=b"not found",
             )
 
@@ -300,6 +304,7 @@ def make_file_tests(context: TestContext) -> list[TestCase]:
             assert_error_response(
                 recv_frame(sock),
                 expected_request_id=request_id,
+                expected_code=ERROR_CODE_INCOMPLETE,
                 contains=b"incomplete",
             )
 
@@ -317,6 +322,7 @@ def make_file_tests(context: TestContext) -> list[TestCase]:
             assert_error_response(
                 recv_frame(sock),
                 expected_request_id=request_id,
+                expected_code=ERROR_CODE_INVALID_STATE,
                 contains=b"state",
             )
 
@@ -350,6 +356,7 @@ def make_file_tests(context: TestContext) -> list[TestCase]:
             assert_error_response(
                 recv_frame(sock),
                 expected_request_id=request_id,
+                expected_code=ERROR_CODE_BUSY,
                 contains=b"active",
             )
 

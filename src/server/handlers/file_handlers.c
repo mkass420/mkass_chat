@@ -6,10 +6,40 @@
 #include "server/file_repository.h"
 #include "server/file_storage.h"
 #include "server/file_transfer.h"
+#include "server/handlers/service_handlers.h"
 
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+
+static ErrorCode file_transfer_error_code(FileTransferResult result) {
+    switch(result) {
+        case FILE_TRANSFER_INVALID_ARGUMENT: return ERROR_CODE_INVALID_REQUEST;
+        case FILE_TRANSFER_INVALID_STATE: return ERROR_CODE_INVALID_STATE;
+        case FILE_TRANSFER_BUSY: return ERROR_CODE_BUSY;
+        case FILE_TRANSFER_FILE_TOO_LARGE: return ERROR_CODE_TOO_LARGE;
+        case FILE_TRANSFER_INVALID_CHUNK: return ERROR_CODE_INVALID_CHUNK;
+        case FILE_TRANSFER_INCOMPLETE: return ERROR_CODE_INCOMPLETE;
+        case FILE_TRANSFER_STORAGE_ERROR: return ERROR_CODE_STORAGE_FAILURE;
+
+        case FILE_TRANSFER_OK:
+        default: return ERROR_CODE_INTERNAL;
+    }
+}
+
+static ErrorCode file_repository_error_code(FileRepositoryResult result) {
+    switch(result) {
+        case FILE_REPOSITORY_NOT_FOUND: return ERROR_CODE_NOT_FOUND;
+        case FILE_REPOSITORY_ALREADY_EXISTS: return ERROR_CODE_ALREADY_EXISTS;
+
+        case FILE_REPOSITORY_DATABASE_ERROR:
+        case FILE_REPOSITORY_CORRUPT_DATA: return ERROR_CODE_DATABASE_FAILURE;
+
+        case FILE_REPOSITORY_INVALID_ARGUMENT:
+        case FILE_REPOSITORY_OK:
+        default: return ERROR_CODE_INTERNAL;
+    }
+}
 
 static TransportIoResult file_queue_frame(
     ServerState*      server,
@@ -20,19 +50,6 @@ static TransportIoResult file_queue_frame(
     uint32_t          payload_len
 ) {
     return transport_queue_frame(&connection->transport, &server->frame_codec, type, request_id, payload, payload_len);
-}
-
-static TransportIoResult file_queue_error(
-    ServerState*      server,
-    ClientConnection* connection,
-    uint32_t          request_id,
-    const char*       message
-) {
-    const size_t message_len = strlen(message);
-
-    return file_queue_frame(
-        server, connection, MSG_TYPE_ERROR_RESPONSE, request_id, (const uint8_t*)message, (uint32_t)message_len
-    );
 }
 
 static const char* file_transfer_error_message(FileTransferResult result) {
@@ -55,7 +72,9 @@ static TransportIoResult file_queue_transfer_error(
     uint32_t           request_id,
     FileTransferResult result
 ) {
-    return file_queue_error(server, connection, request_id, file_transfer_error_message(result));
+    return server_queue_error_response(
+        server, connection, request_id, file_transfer_error_code(result), file_transfer_error_message(result)
+    );
 }
 
 static TransportIoResult file_queue_repository_error(
@@ -64,16 +83,8 @@ static TransportIoResult file_queue_repository_error(
     uint32_t             request_id,
     FileRepositoryResult result
 ) {
-    const char* message = "File repository error";
-
-    if(result == FILE_REPOSITORY_NOT_FOUND) {
-        message = "File not found";
-    }
-    else if(result == FILE_REPOSITORY_ALREADY_EXISTS) {
-        message = "File identifier already exists";
-    }
-
-    return file_queue_error(server, connection, request_id, message);
+    const char* message = file_repository_result_to_string(result);
+    return server_queue_error_response(server, connection, request_id, file_repository_error_code(result), message);
 }
 
 static void file_remove_completed_upload(ServerState* server, const FileId* file_id) {
@@ -94,7 +105,10 @@ TransportIoResult server_handle_file_upload_begin(
     FileUploadBeginRequest upload_request;
 
     if(!file_upload_begin_request_decode(request->payload, request->payload_len, &upload_request)) {
-        return file_queue_error(server, connection, request->header.request_id, "Invalid file upload begin payload");
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_INVALID_REQUEST,
+            "Invalid file upload begin payload"
+        );
     }
 
     const FileTransferResult result = file_upload_begin(
@@ -168,8 +182,9 @@ TransportIoResult server_handle_file_upload_finish(
 
     if(now == (time_t)-1) {
         (void)file_storage_remove_object(&server->file_storage, &completed.file_id);
-
-        return file_queue_error(server, connection, request->header.request_id, "Failed to create file metadata");
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_INTERNAL, "Failed to create file metadata"
+        );
     }
 
     FileMetadata metadata = {
@@ -229,7 +244,10 @@ TransportIoResult server_handle_file_download_begin(
     FileDownloadBeginRequest download_request;
 
     if(!file_download_begin_request_decode(request->payload, request->payload_len, &download_request)) {
-        return file_queue_error(server, connection, request->header.request_id, "Invalid file download begin payload");
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_INVALID_REQUEST,
+            "Invalid file download begin payload"
+        );
     }
 
     FileMetadata metadata;
@@ -242,7 +260,9 @@ TransportIoResult server_handle_file_download_begin(
     }
 
     if(metadata.owner_user_id != connection->user_id) {
-        return file_queue_error(server, connection, request->header.request_id, "Access denied");
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_ACCESS_DENIED, "Access denied"
+        );
     }
 
     const FileTransferResult transfer_result = file_download_begin(
@@ -257,8 +277,9 @@ TransportIoResult server_handle_file_download_begin(
     if(connection->files.download.file_size != metadata.file_size) {
         file_download_abort(&connection->files.download);
 
-        return file_queue_error(
-            server, connection, request->header.request_id, "Stored file does not match its metadata"
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_STORAGE_FAILURE,
+            "Stored file does not match its metadata"
         );
     }
 
@@ -325,8 +346,9 @@ TransportIoResult server_handle_file_download_chunk(
             file_download_abort(&connection->files.download);
         }
 
-        return file_queue_error(
-            server, connection, request->header.request_id, "File download produced an empty chunk"
+        return server_queue_error_response(
+            server, connection, request->header.request_id, ERROR_CODE_STORAGE_FAILURE,
+            "File download produced an empty chunk"
         );
     }
 

@@ -62,6 +62,7 @@ int main(void) {
     register_protocol_tests(&suite);
     register_frame_tests(&suite);
     register_binary_tests(&suite);
+    register_error_protocol_tests(&suite);
     register_file_protocol_tests(&suite);
     register_transport_tests(&suite);
     register_connection_tests(&suite);

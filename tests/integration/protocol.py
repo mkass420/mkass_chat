@@ -29,6 +29,8 @@ MSG_TYPE_PING_RESPONSE = 2
 MSG_TYPE_ECHO_REQUEST = 3
 MSG_TYPE_ECHO_RESPONSE = 4
 
+MSG_TYPE_REGISTER_REQUEST = 10
+
 MSG_TYPE_FILE_UPLOAD_BEGIN_REQUEST = 40
 MSG_TYPE_FILE_UPLOAD_BEGIN_RESPONSE = 41
 MSG_TYPE_FILE_UPLOAD_CHUNK_REQUEST = 42
@@ -42,7 +44,31 @@ MSG_TYPE_FILE_DOWNLOAD_CHUNK_RESPONSE = 49
 
 MSG_TYPE_ERROR_RESPONSE = 255
 
+ERROR_CODE_INVALID_REQUEST = 1
+ERROR_CODE_NOT_AUTHENTICATED = 2
+ERROR_CODE_ACCESS_DENIED = 3
+ERROR_CODE_NOT_FOUND = 4
+ERROR_CODE_ALREADY_EXISTS = 5
+ERROR_CODE_BUSY = 6
+ERROR_CODE_INVALID_STATE = 7
+ERROR_CODE_TOO_LARGE = 8
+ERROR_CODE_INVALID_CHUNK = 9
+ERROR_CODE_INCOMPLETE = 10
+ERROR_CODE_STORAGE_FAILURE = 11
+ERROR_CODE_DATABASE_FAILURE = 12
+ERROR_CODE_NOT_IMPLEMENTED = 13
+ERROR_CODE_INTERNAL = 14
+
+ERROR_RESPONSE_PREFIX_SIZE = 4
+ERROR_MESSAGE_MAX_LENGTH = 512
+
 assert PACKET_HEADER_SIZE == 20
+
+
+@dataclass(frozen=True)
+class DecodedError:
+    code: int
+    message: bytes
 
 
 @dataclass(frozen=True)
@@ -71,9 +97,7 @@ def deterministic_bytes(size: int, seed: bytes = b"mkass-chat") -> bytes:
     counter = 0
 
     while len(output) < size:
-        output.extend(
-            hashlib.sha256(seed + struct.pack("!I", counter)).digest()
-        )
+        output.extend(hashlib.sha256(seed + struct.pack("!I", counter)).digest())
         counter += 1
 
     return bytes(output[:size])
@@ -296,12 +320,38 @@ def assert_response(
         )
 
 
+def decode_error_response(payload: bytes) -> DecodedError:
+    require(
+        len(payload) >= ERROR_RESPONSE_PREFIX_SIZE,
+        "ERROR_RESPONSE короче обязательного префикса",
+    )
+
+    code, message_len = struct.unpack("!HH", payload[:ERROR_RESPONSE_PREFIX_SIZE])
+    message = payload[ERROR_RESPONSE_PREFIX_SIZE:]
+
+    require(code != 0, "ERROR_RESPONSE содержит нулевой error_code")
+    require(
+        message_len <= ERROR_MESSAGE_MAX_LENGTH,
+        f"Слишком длинный текст ошибки: {message_len}",
+    )
+    require(
+        len(message) == message_len,
+        (
+            "Длина текста ошибки отличается: "
+            f"получено {len(message)}, объявлено {message_len}"
+        ),
+    )
+
+    return DecodedError(code=code, message=message)
+
+
 def assert_error_response(
     frame: ReceivedFrame,
     *,
     expected_request_id: int,
+    expected_code: Optional[int] = None,
     contains: Optional[bytes] = None,
-) -> None:
+) -> DecodedError:
     require(
         frame.message_type == MSG_TYPE_ERROR_RESPONSE,
         f"Ожидался ERROR_RESPONSE, получен type={frame.message_type}",
@@ -312,11 +362,21 @@ def assert_error_response(
     )
     require(not frame.is_compressed, "ERROR_RESPONSE не должен быть сжат")
 
+    error = decode_error_response(frame.payload)
+
+    if expected_code is not None:
+        require(
+            error.code == expected_code,
+            f"Неверный error_code: {error.code}, ожидался {expected_code}",
+        )
+
     if contains is not None:
         require(
-            contains.lower() in frame.payload.lower(),
-            f"Текст ошибки {frame.payload!r} не содержит {contains!r}",
+            contains.lower() in error.message.lower(),
+            f"Текст ошибки {error.message!r} не содержит {contains!r}",
         )
+
+    return error
 
 
 def expect_disconnect_after(
